@@ -455,7 +455,7 @@ func (f *File) InsertRow(sheet string, row int) error {
 // worksheet, it will cause a file error when you open it. The excelize only
 // partially updates these references currently.
 func (f *File) DuplicateRow(sheet string, row int) error {
-	return f.DuplicateRowTo(sheet, row, row+1)
+	return f.DuplicateRowTo(sheet, row,sheet, row+1)
 }
 
 // DuplicateRowTo inserts a copy of specified row by it Excel number
@@ -467,16 +467,16 @@ func (f *File) DuplicateRow(sheet string, row int) error {
 // as formulas, charts, and so on. If there is any referenced value of the
 // worksheet, it will cause a file error when you open it. The excelize only
 // partially updates these references currently.
-func (f *File) DuplicateRowTo(sheet string, row, row2 int) error {
-	if row < 1 {
-		return newInvalidRowNumberError(row)
+func (f *File) DuplicateRowTo(fromSheet string, fromRow int, toSheet string, toRow int) error {
+	if fromRow < 1 {
+		return newInvalidRowNumberError(fromRow)
 	}
 
-	xlsx, err := f.workSheetReader(sheet)
+	xlsx, err := f.workSheetReader(fromSheet)
 	if err != nil {
 		return err
 	}
-	if row > len(xlsx.SheetData.Row) || row2 < 1 || row == row2 {
+	if fromRow > len(xlsx.SheetData.Row) || toRow < 1 || (fromSheet == toSheet && fromRow == toRow) {
 		return nil
 	}
 
@@ -484,7 +484,7 @@ func (f *File) DuplicateRowTo(sheet string, row, row2 int) error {
 	var rowCopy xlsxRow
 
 	for i, r := range xlsx.SheetData.Row {
-		if r.R == row {
+		if r.R == fromRow {
 			rowCopy = xlsx.SheetData.Row[i]
 			ok = true
 			break
@@ -493,29 +493,30 @@ func (f *File) DuplicateRowTo(sheet string, row, row2 int) error {
 	if !ok {
 		return nil
 	}
+	toXlsx, err := f.workSheetReader(toSheet)
 
-	if err := f.adjustHelper(sheet, rows, row2, 1); err != nil {
+	if err := f.adjustHelper(toSheet, rows, toRow, 1); err != nil {
 		return err
 	}
 
 	idx2 := -1
-	for i, r := range xlsx.SheetData.Row {
-		if r.R == row2 {
+	for i, r := range toXlsx.SheetData.Row {
+		if r.R == toRow {
 			idx2 = i
 			break
 		}
 	}
-	if idx2 == -1 && len(xlsx.SheetData.Row) >= row2 {
+	if idx2 == -1 && len(toXlsx.SheetData.Row) >= toRow {
 		return nil
 	}
 
 	rowCopy.C = append(make([]xlsxC, 0, len(rowCopy.C)), rowCopy.C...)
-	f.ajustSingleRowDimensions(&rowCopy, row2)
+	f.ajustSingleRowDimensions(&rowCopy, toRow)
 
 	if idx2 != -1 {
-		xlsx.SheetData.Row[idx2] = rowCopy
+		toXlsx.SheetData.Row[idx2] = rowCopy
 	} else {
-		xlsx.SheetData.Row = append(xlsx.SheetData.Row, rowCopy)
+		toXlsx.SheetData.Row = append(toXlsx.SheetData.Row, rowCopy)
 	}
 	return nil
 }
